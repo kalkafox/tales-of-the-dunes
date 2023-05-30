@@ -1,7 +1,12 @@
 import { animated, useSpring } from '@react-spring/web'
 
 import { version } from '@/data/vd.json'
-import { currentStoryAtom, gameActiveAtom, storyStepAtom } from '@/util/atoms'
+import {
+  currentStoryAtom,
+  gameActiveAtom,
+  skipTextAtom,
+  storyStepAtom,
+} from '@/util/atoms'
 import { useAtom } from 'jotai'
 
 import { Icon } from '@iconify/react'
@@ -23,7 +28,9 @@ export default function Main() {
 
   const [messageContent, setMessageContent] = useState('')
 
-  const [skipText, setSkipText] = useState(false)
+  const [savedStep, setSavedStep] = useState(0)
+
+  const [skipText, setSkipText] = useAtom(skipTextAtom)
 
   const [titleSpring, setTitleSpring] = useSpring(() => ({
     display: 'none',
@@ -88,6 +95,10 @@ export default function Main() {
     scale: 0.9,
   }))
 
+  const [textSpring, setTextSpring] = useSpring(() => ({
+    opacity: 1,
+  }))
+
   useEffect(() => {
     setOptionSpring.start({
       display: gameActive ? 'block' : 'none',
@@ -99,14 +110,22 @@ export default function Main() {
   useEffect(() => {
     if (storyStep < 0) return
 
-    console.log(storyStep)
+    setTextSpring.start({
+      opacity: 1,
+    })
+
+    if (skipText) {
+      setMessageContent(currentStory.steps[storyStep].text)
+      return () => {
+        setMessageContent('')
+      }
+    }
+
     let i = 0
     let timeouts: NodeJS.Timeout[] = []
     for (const c of currentStory.steps[storyStep].text) {
       const t = setTimeout(() => {
-        setMessageContent((prev) =>
-          !skipText ? prev + c : currentStory.steps[storyStep].text,
-        )
+        setMessageContent((prev) => prev + c)
       }, 35 * i++)
       timeouts.push(t)
     }
@@ -119,7 +138,23 @@ export default function Main() {
   }, [storyStep, skipText])
 
   return (
-    <div className="fixed h-screen w-screen">
+    <div
+      onWheel={(e) => {
+        setStoryStep((prev) => {
+          if (prev >= savedStep) {
+            return savedStep
+          }
+
+          // TODO: fix this
+
+          if (prev + (e.deltaY > 0 ? 1 : -1) < 0) return 0
+          if (prev + (e.deltaY > 0 ? 1 : -1) >= currentStory.steps.length)
+            return currentStory.steps.length - 1
+          return prev + (e.deltaY > 0 ? 1 : -1)
+        })
+      }}
+      className="fixed h-screen w-screen"
+    >
       <animated.button
         style={optionSpring}
         onClick={() => {
@@ -141,44 +176,43 @@ export default function Main() {
       <animated.div
         onClick={() => {
           if (gameActive) {
-            if (
-              messageContent.length < currentStory.steps[storyStep].text.length
-            ) {
-              setSkipText(true)
-              return
-            } else {
-              setSkipText(false)
-            }
+            setSavedStep(storyStep)
+            setTextSpring.start({
+              opacity: 0,
+              onRest: (_, ctrl) => {
+                setStoryStep((prev) => {
+                  if (prev + 1 >= currentStory.steps.length) {
+                    router.push('/')
+                    setMessageBoxSpring.start({
+                      opacity: 0,
+                      scale: 0.9,
+                      onRest: (_, ctrl) => {
+                        ctrl.start({
+                          display: 'none',
+                        })
+                        setGameActive(false)
 
-            setStoryStep((prev) => {
-              if (prev + 1 >= currentStory.steps.length) {
-                router.push('/')
-                setMessageBoxSpring.start({
-                  opacity: 0,
-                  scale: 0.9,
-                  onRest: (_, ctrl) => {
-                    ctrl.start({
-                      display: 'none',
+                        setMenuSpring.start({
+                          opacity: 1,
+                          scale: 1,
+                          display: 'block',
+                        })
+                      },
                     })
-                    setGameActive(false)
-
-                    setMenuSpring.start({
-                      opacity: 1,
-                      scale: 1,
-                      display: 'block',
-                    })
-                  },
+                    return -1
+                  }
+                  return prev + 1
                 })
-                return -1
-              }
-              return prev + 1
+              },
             })
           }
         }}
         style={messageBoxSpring}
         className="fixed bottom-0 left-0 right-0 m-auto my-2 h-32 w-[700px] select-none rounded-md bg-zinc-200/10"
       >
-        <p className="m-2">{messageContent}</p>
+        <animated.p style={textSpring} className="m-2">
+          {messageContent}
+        </animated.p>
       </animated.div>
 
       <animated.div
