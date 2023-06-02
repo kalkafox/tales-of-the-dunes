@@ -34,7 +34,7 @@ export default {
     {
       text: 'I adjusted my glasses, their lenses reflecting the dim moonlight and peered into the vast expanse of the desert.',
       effects: (springs: Springs) => {
-        springs.bgSpring.start({ scale: 1.1 })
+        springs.bgSpring.start({ scale: 1.2 })
       },
     },
     {
