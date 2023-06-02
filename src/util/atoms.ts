@@ -1,6 +1,6 @@
 import { atom } from 'jotai'
 
-import story0 from '@/data/stories/0.json'
+import story0 from '@/data/stories/0'
 
 export const gameActiveAtom = atom(false)
 
