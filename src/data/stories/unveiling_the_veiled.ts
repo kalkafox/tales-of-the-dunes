@@ -1,28 +1,45 @@
 import { Springs, Story } from '@/types/story'
+import { fadeIn, fadeOut } from '@/util/audio'
 
 export default {
   id: 1,
   title: 'Unveiling the Veiled',
   steps: [
     {
-      text: "Despite everything that happened, I'll be honest, I'm sort of glad I lived to tell the tale.",
+      text: 'Looking back, I never imagined that it would come to this.',
     },
     {
-      text: "Does that make me selfish, though? That question lingered in my mind for a while... but I eventually came to the conclusion that perhaps it didn't.",
+      text: 'The Sethrakk that stood by at the time, made their efforts to redeem themselves in the colors they wore.',
     },
     {
-      text: 'Maybe.. it was the way I perceived others that made me feel that way.',
+      text: 'For the most part, they were successful. The Sethrakk were able to integrate into the Horde, and the Vulpera were able to live in relative peace.',
     },
     {
-      text: "Atleast, that's what I keep telling myself. It's not like the dunes have been in anyone's spotlight recently, anyway.",
+      text: "Atleast, that's what I kept telling myself. It's not like the dunes have been in anyone's spotlight recently, anyway.",
       effects: (springs: Springs) => {
         springs.bgSpring.start({ opacity: 0 })
+
+        if (springs.audio && !springs.audio.paused) {
+          fadeOut(springs.audio)
+        }
       },
     },
     {
       text: 'The wind whispered through what had been familiar to me for as long as I could remember.',
       effects: (springs: Springs) => {
-        springs.bgSpring.start({ opacity: 0.8 })
+        springs.bgSpring.start({
+          opacity: 0.8,
+          config: {
+            // slow physics
+            mass: 10,
+            tension: 100,
+            friction: 100,
+          },
+        })
+
+        if (springs.audio && springs.audio.paused) {
+          fadeIn(springs.audio)
+        }
       },
     },
     {
@@ -34,7 +51,15 @@ export default {
     {
       text: 'I adjusted my glasses, their lenses reflecting the dim moonlight and peered into the vast expanse of the desert.',
       effects: (springs: Springs) => {
-        springs.bgSpring.start({ scale: 1.2 })
+        springs.bgSpring.start({
+          scale: 1.2,
+          config: {
+            // slow physics
+            mass: 10,
+            tension: 100,
+            friction: 100,
+          },
+        })
       },
     },
     {
@@ -45,6 +70,9 @@ export default {
     },
     {
       text: 'And, with each step, my pawpads sank into the soft sand, leaving a trail of shallow footprints behind me.',
+    },
+    {
+      text: "I remember being very alert. It's as if something had been telling me to be on my guard, but I couldn't quite place my paw on it.",
     },
   ],
 } as Story

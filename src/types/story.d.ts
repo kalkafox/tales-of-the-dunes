@@ -25,6 +25,7 @@ export type Springs = {
     y: number
     display: string
   }>
+  audio: HTMLAudioElement
 }
 
 export type Story = {

@@ -11,7 +11,7 @@ import { useAtom } from 'jotai'
 
 import { Icon } from '@iconify/react'
 import { useRouter } from 'next/router'
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { roboto } from '@/util/font'
 
 import { storyData } from '@/util/stories'
@@ -20,6 +20,8 @@ import { storyData } from '@/util/stories'
 
 export default function Main() {
   const router = useRouter()
+
+  const audioRef = useRef<HTMLAudioElement>(null)
 
   const [gameActive, setGameActive] = useAtom(gameActiveAtom)
 
@@ -167,10 +169,33 @@ export default function Main() {
       display: gameActive ? 'block' : 'none',
       opacity: gameActive ? 1 : 0,
     })
+
+    if (localStorage.getItem('saved-session')) {
+      // gather the previous step effects
+
+      const filtered = currentStory.steps.filter((step, i) => {
+        return (
+          i < parseInt(localStorage.getItem('saved-session')!) &&
+          step.effects &&
+          typeof step.effects === 'function'
+        )
+      })
+
+      filtered.forEach((step) => {
+        step.effects!({
+          bgSpring: setBgSpring,
+          firstSpriteSpring: setFirstSpriteSpring,
+          secondSpriteSpring: setSecondSpriteSpring,
+          audio: audioRef.current!,
+        })
+      })
+    }
+
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [gameActive])
 
   useEffect(() => {
+    console.log(storyStep)
     if (storyStep < 0) return
 
     if (storyStep === savedStep) {
@@ -178,6 +203,8 @@ export default function Main() {
     }
 
     const step = currentStory.steps[storyStep]
+
+    if (!step) return
 
     setTextSpring.set({
       x: skipText ? 0 : -10,
@@ -194,6 +221,7 @@ export default function Main() {
         bgSpring: setBgSpring,
         firstSpriteSpring: setFirstSpriteSpring,
         secondSpriteSpring: setSecondSpriteSpring,
+        audio: audioRef.current!,
       })
     }
 
@@ -306,159 +334,353 @@ export default function Main() {
   }, [router.pathname])
 
   return (
-    <div className="fixed h-screen w-screen">
-      <animated.video
-        preload="auto"
-        style={bgSpring}
-        loop
-        autoPlay
-        muted
-        className="fixed h-full w-full object-cover"
-      >
-        {/* source is .ts */}
-        <source src="/scene2.m3u8" type="application/x-mpegURL" />
-        <source src="/scene2.mp4" type="video/mp4" />
-      </animated.video>
-      <animated.button
-        style={optionSpring}
-        onClick={() => {
-          router.push('/settings')
-          setMenuSpring.start({
-            opacity: 1,
-            scale: 1,
-            display: 'block',
-          })
-        }}
-        className="fixed bottom-0 right-0 m-2 rounded bg-zinc-900/50 px-1 py-1 font-bold text-white transition-colors hover:bg-zinc-900/75"
-      >
-        <Icon
-          icon="ion:options-sharp"
-          width={24}
-          height={24}
-          className="mx-1 inline"
-        />
-      </animated.button>
-      <animated.div
-        onWheel={(e) => {
-          if (e.deltaY > 0) {
-            setStoryStep((prev) => {
-              if (prev - 1 < 0) {
-                return prev
-              }
-              return prev - 1
-            })
-            if (storyStep === 0) {
-              return
-            }
-            setSkipText(true)
-            setTraceback(true)
-          }
-
-          if (e.deltaY < 0) {
-            if (storyStep === savedStep - 1) {
-              setTraceback(false)
-            }
-
-            if (storyStep >= savedStep) {
-              return
-            }
-
-            setStoryStep((prev) => {
-              if (prev + 1 >= currentStory.steps.length) {
-                return prev
-              }
-              return prev + 1
-            })
-          }
-        }}
-        onClick={() => {
-          if (gameActive) {
-            if (!traceback) {
-              setSavedStep(storyStep)
-
-              localStorage.setItem('saved-session', storyStep.toString())
-              localStorage.setItem('current-story', currentStory.id.toString())
-            }
-
-            if (messageContent < currentStory.steps[storyStep].text) {
-              setSkipText(true)
-              return
-            }
-
-            setArrowOpacitySpring.start({
-              opacity: 0,
-            })
-
-            setTextSpring.start({
-              opacity: 0,
-              x: 10,
-              onRest: (_, ctrl) => {
-                setSkipText(false)
-                setStoryStep((prev) => {
-                  if (prev + 1 >= currentStory.steps.length) {
-                    router.push('/')
-                    setMessageBoxSpring.start({
-                      opacity: 0,
-                      scale: 0.9,
-                      onRest: (_, ctrl) => {
-                        ctrl.start({
-                          display: 'none',
-                        })
-                        setGameActive(false)
-
-                        setMenuSpring.start({
-                          opacity: 1,
-                          scale: 1,
-                          display: 'block',
-                        })
-                      },
-                    })
-                    return -1
-                  }
-                  return prev + 1
-                })
-              },
-            })
-          }
-        }}
-        style={messageBoxSpring}
-        className="fixed bottom-0 left-0 right-0 m-auto my-2 h-36 w-[700px] cursor-pointer select-none rounded-md bg-zinc-800/75 backdrop-blur-lg"
-      >
-        <animated.p
-          style={textSpring}
-          className={`m-2 ${font} transition-colors ${
-            traceback && 'text-zinc-500'
-          }`}
+    <>
+      <audio ref={audioRef} loop src="/vd_amb.ogg" />
+      <div className="fixed h-screen w-screen">
+        <animated.video
+          preload="auto"
+          style={bgSpring}
+          loop
+          autoPlay
+          muted
+          className="fixed h-full w-full object-cover"
         >
-          {messageContent}
-        </animated.p>
-        <animated.div style={arrowOpacitySpring}>
-          <animated.div
-            style={arrowSpring}
-            className="absolute bottom-1 left-0 right-0 m-auto text-center"
+          {/* source is .ts */}
+          <source src="/scene2.m3u8" type="application/x-mpegURL" />
+          <source src="/scene2.mp4" type="video/mp4" />
+        </animated.video>
+        <animated.button
+          style={optionSpring}
+          onClick={() => {
+            router.push('/settings')
+            setMenuSpring.start({
+              opacity: 1,
+              scale: 1,
+              display: 'block',
+            })
+          }}
+          className="fixed bottom-0 right-0 m-2 rounded bg-zinc-900/50 px-1 py-1 font-bold text-white transition-colors hover:bg-zinc-900/75"
+        >
+          <Icon
+            icon="ion:options-sharp"
+            width={24}
+            height={24}
+            className="mx-1 inline"
+          />
+        </animated.button>
+        <animated.div
+          onWheel={(e) => {
+            if (e.deltaY > 0) {
+              setStoryStep((prev) => {
+                if (prev - 1 < 0) {
+                  return prev
+                }
+                return prev - 1
+              })
+              if (storyStep === 0) {
+                return
+              }
+              setSkipText(true)
+              setTraceback(true)
+            }
+
+            if (e.deltaY < 0) {
+              if (storyStep === savedStep - 1) {
+                setTraceback(false)
+              }
+
+              if (storyStep >= savedStep) {
+                return
+              }
+
+              setStoryStep((prev) => {
+                if (prev + 1 >= currentStory.steps.length) {
+                  return prev
+                }
+                return prev + 1
+              })
+            }
+          }}
+          onClick={() => {
+            if (gameActive) {
+              if (!traceback) {
+                setSavedStep(storyStep)
+
+                localStorage.setItem('saved-session', storyStep.toString())
+                localStorage.setItem(
+                  'current-story',
+                  currentStory.id.toString(),
+                )
+              }
+
+              if (messageContent < currentStory.steps[storyStep].text) {
+                setSkipText(true)
+                return
+              }
+
+              setArrowOpacitySpring.start({
+                opacity: 0,
+              })
+
+              setTextSpring.start({
+                opacity: 0,
+                x: 10,
+                onChange: (res, ctrl) => {
+                  if (res.value.opacity < 0.1) {
+                    setSkipText(false)
+                    setStoryStep((prev) => {
+                      if (prev >= currentStory.steps.length) {
+                        router.push('/')
+                        setMessageBoxSpring.start({
+                          opacity: 0,
+                          scale: 0.9,
+                          onRest: (_, msgCtrl) => {
+                            msgCtrl.start({
+                              display: 'none',
+                            })
+
+                            setGameActive(false)
+
+                            setMenuSpring.start({
+                              opacity: 1,
+                              scale: 1,
+                              display: 'block',
+                            })
+                          },
+                        })
+                        return -1
+                      }
+                      console.log('yo')
+                      if (prev === -1) return -1
+                      return prev + 1
+                    })
+                  }
+                },
+              })
+            }
+          }}
+          style={messageBoxSpring}
+          className="fixed bottom-0 left-0 right-0 m-auto my-2 h-36 w-[700px] cursor-pointer select-none rounded-md bg-zinc-800/75 backdrop-blur-lg"
+        >
+          <animated.p
+            style={textSpring}
+            className={`m-2 ${font} transition-colors ${
+              traceback && 'text-zinc-500'
+            }`}
           >
-            <Icon
-              icon="maki:arrow"
-              width={12}
-              height={12}
-              className="mx-1 inline"
-            />
+            {messageContent}
+          </animated.p>
+          <animated.div style={arrowOpacitySpring}>
+            <animated.div
+              style={arrowSpring}
+              className="absolute bottom-1 left-0 right-0 m-auto text-center"
+            >
+              <Icon
+                icon="maki:arrow"
+                width={12}
+                height={12}
+                className="mx-1 inline"
+              />
+            </animated.div>
           </animated.div>
         </animated.div>
-      </animated.div>
 
-      <animated.div
-        style={menuSpring}
-        className="fixed h-full w-full bg-zinc-900/25 backdrop-blur-sm"
-      >
-        {gameActive && (
+        <animated.div
+          style={menuSpring}
+          className="fixed h-full w-full bg-zinc-900/25 backdrop-blur-sm"
+        >
+          {gameActive && (
+            <span className="fixed right-0 m-2">
+              <button
+                onClick={() => {
+                  router.push('/story')
+                  setMenuSpring.start({
+                    opacity: 0,
+                    scale: 1.1,
+                    onRest: (_, ctrl) => {
+                      ctrl.start({
+                        display: 'none',
+                      })
+                    },
+                  })
+                }}
+                className="rounded bg-zinc-900/50 px-1 py-1 font-bold text-white transition-colors hover:bg-zinc-900/75"
+              >
+                <Icon
+                  icon="material-symbols:close"
+                  width={24}
+                  height={24}
+                  className="mx-1 inline"
+                />
+              </button>
+            </span>
+          )}
+          <nav className="fixed bottom-0 grid w-auto grid-cols-1 items-center justify-center">
+            <button
+              onClick={() => {
+                if (gameActive) {
+                  setConfirmationSpring.start({
+                    opacity: 1,
+                    display: 'block',
+                  })
+                  return
+                }
+
+                setStorySelectionSpring.start({
+                  opacity: 1,
+                  display: 'block',
+                })
+              }}
+              className="rounded-r-md p-2 transition-colors hover:bg-zinc-700"
+            >
+              <Icon
+                icon="tabler:book"
+                width={24}
+                height={24}
+                className="absolute left-0 inline"
+              />
+              <span className="mx-6 select-none">New Story</span>
+            </button>
+            <button
+              disabled={true}
+              className="rounded-r-md p-2 text-zinc-400 transition-colors hover:bg-zinc-700"
+            >
+              <Icon
+                icon="mdi:floppy"
+                width={24}
+                height={24}
+                className="absolute left-0 inline"
+              />
+              <span className="select-none">Load Story</span>
+            </button>
+            {gameActive && (
+              <button
+                onClick={() => {
+                  setSettingsSpring.start({
+                    opacity: 1,
+                    display: 'block',
+                  })
+
+                  setMenuSpring.start({
+                    opacity: 0,
+                  })
+                }}
+                className="rounded-r-md p-2 transition-colors hover:bg-zinc-700"
+              >
+                <Icon
+                  icon="mdi:gear"
+                  width={24}
+                  height={24}
+                  className="absolute left-0 inline"
+                />
+                <span className="select-none">Settings</span>
+              </button>
+            )}
+          </nav>
+          <span className="fixed bottom-0 right-0 p-2">
+            <animated.h1 style={titleSpring} className="select-none text-6xl">
+              Tales of the Dunes
+            </animated.h1>
+            <animated.h2 style={versionSpring} className="select-none">
+              <Icon icon="carbon:version" className="mx-1 inline" />
+              <span className="absolute my-[2px]">{appData.version}</span>
+            </animated.h2>
+            <h3 className="select-none text-right text-xs italic text-zinc-600">
+              Whispering dunes sing,
+              <br />
+              Ancient tales in shifting sand,
+              <br />
+              Legends never end.
+            </h3>
+          </span>
+        </animated.div>
+
+        <animated.div
+          style={storySelectionSpring}
+          className="fixed grid h-full w-full items-center justify-center"
+        >
+          <div className="left-0 right-0 m-auto my-4 w-72 rounded-sm bg-zinc-900/80 p-2">
+            <p className="text-center">Select a story.</p>
+            <div className="my-5 grid grid-cols-2 space-x-2">
+              <button
+                onClick={() => {
+                  setCurrentStory(storyData[1])
+
+                  setStorySelectionSpring.start({
+                    opacity: 0,
+                    onRest: (_, ctrl) => {
+                      ctrl.start({
+                        display: 'none',
+                      })
+                    },
+                  })
+
+                  setMenuSpring.start({
+                    opacity: 0,
+                    scale: 1.1,
+                    onRest: (_, ctrl) => {
+                      ctrl.start({
+                        display: 'none',
+                      })
+                      setStoryStep(0)
+                      router.push('/story')
+                      setMessageContent('')
+                      setGameActive(true)
+                    },
+                  })
+                }}
+                className="bg-zinc-800 p-1 text-center transition-colors hover:bg-zinc-700"
+              >
+                Unveiling the Veiled (demo)
+              </button>
+              <button
+                onClick={() => {
+                  setCurrentStory(storyData[0])
+
+                  setStorySelectionSpring.start({
+                    opacity: 0,
+                    onRest: (_, ctrl) => {
+                      ctrl.start({
+                        display: 'none',
+                      })
+                    },
+                  })
+
+                  setMenuSpring.start({
+                    opacity: 0,
+                    scale: 1.1,
+                    onRest: (_, ctrl) => {
+                      ctrl.start({
+                        display: 'none',
+                      })
+                      setStoryStep(0)
+                      router.push('/story')
+                      setMessageContent('')
+                      setGameActive(true)
+                    },
+                  })
+                }}
+                className="bg-zinc-800 p-1 text-center transition-colors hover:bg-zinc-700"
+              >
+                Test (debug purposes)
+              </button>
+            </div>
+          </div>
+        </animated.div>
+
+        <animated.div
+          style={settingsSpring}
+          className="fixed h-full w-full bg-zinc-900/25"
+        >
           <span className="fixed right-0 m-2">
             <button
               onClick={() => {
-                router.push('/story')
                 setMenuSpring.start({
+                  opacity: 1,
+                })
+
+                setSettingsSpring.start({
                   opacity: 0,
-                  scale: 1.1,
                   onRest: (_, ctrl) => {
                     ctrl.start({
                       display: 'none',
@@ -476,99 +698,71 @@ export default function Main() {
               />
             </button>
           </span>
-        )}
-        <nav className="fixed bottom-0 grid w-auto grid-cols-1 items-center justify-center">
-          <button
-            onClick={() => {
-              if (gameActive) {
+          <div className="left-0 right-0 m-auto my-2 w-32">
+            <label
+              htmlFor="font"
+              className="mb-2 block select-none text-sm font-medium text-gray-900 dark:text-white"
+            >
+              Font
+            </label>
+            <select
+              id="font"
+              onChange={(e) => {
+                setFont(e.target.value)
+                console.log(e.target.value)
+              }}
+              className="block w-full rounded-lg border border-gray-300 bg-gray-50 p-2.5 text-sm text-gray-900 focus:border-blue-500 focus:ring-blue-500 dark:border-gray-600 dark:bg-gray-700 dark:text-white dark:placeholder-gray-400 dark:focus:border-blue-500 dark:focus:ring-blue-500"
+            >
+              {appData.fonts.map((font) => (
+                <option key={font[0]} value={font[1]}>
+                  {font[0]}
+                </option>
+              ))}
+            </select>
+          </div>
+          <div className="left-0 right-0 m-auto my-2 w-32">
+            <label
+              htmlFor="text-speed-range"
+              className="mb-2 block text-sm font-medium text-gray-900 dark:text-white"
+            >
+              Text Speed
+            </label>
+            <input
+              id="text-speed-range"
+              type="range"
+              min="0"
+              max="50"
+              onChange={(e) => {
+                setTextSpeed(parseInt(e.target.value))
+              }}
+              value={textSpeed}
+              className="h-2 w-full cursor-pointer appearance-none rounded-lg bg-gray-200 dark:bg-gray-700"
+            ></input>
+          </div>
+        </animated.div>
+        <animated.div
+          style={confirmationSpring}
+          className="fixed h-full w-full bg-zinc-900/50"
+        >
+          <div className="fixed left-0 right-0 m-auto grid w-[400px] grid-cols-1 gap-2">
+            <h1 className="rounded-sm bg-zinc-900 p-2">
+              Are you sure you want to start a new story?
+              <br />
+              You currently have a session open, your progress will be lost.
+            </h1>
+            <button
+              onClick={() => {
+                setMenuSpring.start({
+                  opacity: 0,
+                  scale: 1.1,
+                  onRest: (_, ctrl) => {
+                    ctrl.start({
+                      display: 'none',
+                    })
+                  },
+                })
+
                 setConfirmationSpring.start({
-                  opacity: 1,
-                  display: 'block',
-                })
-                return
-              }
-
-              setStorySelectionSpring.start({
-                opacity: 1,
-                display: 'block',
-              })
-            }}
-            className="rounded-r-md p-2 transition-colors hover:bg-zinc-700"
-          >
-            <Icon
-              icon="tabler:book"
-              width={24}
-              height={24}
-              className="absolute left-0 inline"
-            />
-            <span className="mx-6 select-none">New Story</span>
-          </button>
-          <button
-            disabled={true}
-            className="rounded-r-md p-2 text-zinc-400 transition-colors hover:bg-zinc-700"
-          >
-            <Icon
-              icon="mdi:floppy"
-              width={24}
-              height={24}
-              className="absolute left-0 inline"
-            />
-            <span className="select-none">Load Story</span>
-          </button>
-          {gameActive && (
-            <button
-              onClick={() => {
-                setSettingsSpring.start({
-                  opacity: 1,
-                  display: 'block',
-                })
-
-                setMenuSpring.start({
-                  opacity: 0,
-                })
-              }}
-              className="rounded-r-md p-2 transition-colors hover:bg-zinc-700"
-            >
-              <Icon
-                icon="mdi:gear"
-                width={24}
-                height={24}
-                className="absolute left-0 inline"
-              />
-              <span className="select-none">Settings</span>
-            </button>
-          )}
-        </nav>
-        <span className="fixed bottom-0 right-0 p-2">
-          <animated.h1 style={titleSpring} className="select-none text-6xl">
-            Tales of the Dunes
-          </animated.h1>
-          <animated.h2 style={versionSpring} className="select-none">
-            <Icon icon="carbon:version" className="mx-1 inline" />
-            <span className="absolute my-[2px]">{appData.version}</span>
-          </animated.h2>
-          <h3 className="select-none text-right text-xs italic text-zinc-600">
-            Whispering dunes sing,
-            <br />
-            Ancient tales in shifting sand,
-            <br />
-            Legends never end.
-          </h3>
-        </span>
-      </animated.div>
-
-      <animated.div
-        style={storySelectionSpring}
-        className="fixed grid h-full w-full items-center justify-center"
-      >
-        <div className="left-0 right-0 m-auto my-4 w-72 rounded-sm bg-zinc-900/80 p-2">
-          <p className="text-center">Select a story.</p>
-          <div className="my-5 grid grid-cols-2 space-x-2">
-            <button
-              onClick={() => {
-                setCurrentStory(storyData[1])
-
-                setStorySelectionSpring.start({
                   opacity: 0,
                   onRest: (_, ctrl) => {
                     ctrl.start({
@@ -576,184 +770,29 @@ export default function Main() {
                     })
                   },
                 })
-
-                setMenuSpring.start({
-                  opacity: 0,
-                  scale: 1.1,
-                  onRest: (_, ctrl) => {
-                    ctrl.start({
-                      display: 'none',
-                    })
-                    setStoryStep(0)
-                    router.push('/story')
-                    setMessageContent('')
-                    setGameActive(true)
-                  },
-                })
               }}
-              className="bg-zinc-800 p-1 text-center transition-colors hover:bg-zinc-700"
+              className="rounded-sm bg-zinc-900 p-2 transition-colors hover:bg-zinc-700"
             >
-              Unveiling the Veiled (demo)
+              Yes
             </button>
             <button
               onClick={() => {
-                setCurrentStory(storyData[0])
-
-                setStorySelectionSpring.start({
+                setConfirmationSpring.start({
                   opacity: 0,
                   onRest: (_, ctrl) => {
                     ctrl.start({
                       display: 'none',
                     })
-                  },
-                })
-
-                setMenuSpring.start({
-                  opacity: 0,
-                  scale: 1.1,
-                  onRest: (_, ctrl) => {
-                    ctrl.start({
-                      display: 'none',
-                    })
-                    setStoryStep(0)
-                    router.push('/story')
-                    setMessageContent('')
-                    setGameActive(true)
                   },
                 })
               }}
-              className="bg-zinc-800 p-1 text-center transition-colors hover:bg-zinc-700"
+              className="rounded-sm bg-zinc-900 p-2 transition-colors hover:bg-zinc-700"
             >
-              Test (debug purposes)
+              No
             </button>
           </div>
-        </div>
-      </animated.div>
-
-      <animated.div
-        style={settingsSpring}
-        className="fixed h-full w-full bg-zinc-900/25"
-      >
-        <span className="fixed right-0 m-2">
-          <button
-            onClick={() => {
-              setMenuSpring.start({
-                opacity: 1,
-              })
-
-              setSettingsSpring.start({
-                opacity: 0,
-                onRest: (_, ctrl) => {
-                  ctrl.start({
-                    display: 'none',
-                  })
-                },
-              })
-            }}
-            className="rounded bg-zinc-900/50 px-1 py-1 font-bold text-white transition-colors hover:bg-zinc-900/75"
-          >
-            <Icon
-              icon="material-symbols:close"
-              width={24}
-              height={24}
-              className="mx-1 inline"
-            />
-          </button>
-        </span>
-        <div className="left-0 right-0 m-auto my-2 w-32">
-          <label
-            htmlFor="font"
-            className="mb-2 block select-none text-sm font-medium text-gray-900 dark:text-white"
-          >
-            Font
-          </label>
-          <select
-            id="font"
-            onChange={(e) => {
-              setFont(e.target.value)
-              console.log(e.target.value)
-            }}
-            className="block w-full rounded-lg border border-gray-300 bg-gray-50 p-2.5 text-sm text-gray-900 focus:border-blue-500 focus:ring-blue-500 dark:border-gray-600 dark:bg-gray-700 dark:text-white dark:placeholder-gray-400 dark:focus:border-blue-500 dark:focus:ring-blue-500"
-          >
-            {appData.fonts.map((font) => (
-              <option key={font[0]} value={font[1]}>
-                {font[0]}
-              </option>
-            ))}
-          </select>
-        </div>
-        <div className="left-0 right-0 m-auto my-2 w-32">
-          <label
-            htmlFor="text-speed-range"
-            className="mb-2 block text-sm font-medium text-gray-900 dark:text-white"
-          >
-            Text Speed
-          </label>
-          <input
-            id="text-speed-range"
-            type="range"
-            min="0"
-            max="50"
-            onChange={(e) => {
-              setTextSpeed(parseInt(e.target.value))
-            }}
-            value={textSpeed}
-            className="h-2 w-full cursor-pointer appearance-none rounded-lg bg-gray-200 dark:bg-gray-700"
-          ></input>
-        </div>
-      </animated.div>
-      <animated.div
-        style={confirmationSpring}
-        className="fixed h-full w-full bg-zinc-900/50"
-      >
-        <div className="fixed left-0 right-0 m-auto grid w-[400px] grid-cols-1 gap-2">
-          <h1 className="rounded-sm bg-zinc-900 p-2">
-            Are you sure you want to start a new story?
-            <br />
-            You currently have a session open, your progress will be lost.
-          </h1>
-          <button
-            onClick={() => {
-              setMenuSpring.start({
-                opacity: 0,
-                scale: 1.1,
-                onRest: (_, ctrl) => {
-                  ctrl.start({
-                    display: 'none',
-                  })
-                },
-              })
-
-              setConfirmationSpring.start({
-                opacity: 0,
-                onRest: (_, ctrl) => {
-                  ctrl.start({
-                    display: 'none',
-                  })
-                },
-              })
-            }}
-            className="rounded-sm bg-zinc-900 p-2 transition-colors hover:bg-zinc-700"
-          >
-            Yes
-          </button>
-          <button
-            onClick={() => {
-              setConfirmationSpring.start({
-                opacity: 0,
-                onRest: (_, ctrl) => {
-                  ctrl.start({
-                    display: 'none',
-                  })
-                },
-              })
-            }}
-            className="rounded-sm bg-zinc-900 p-2 transition-colors hover:bg-zinc-700"
-          >
-            No
-          </button>
-        </div>
-      </animated.div>
-    </div>
+        </animated.div>
+      </div>
+    </>
   )
 }
